@@ -1,0 +1,46 @@
+services:
+  # Forex Pulse public storefront — Node.js web service on Render.
+  # Needs a paid instance (Starter, ~$7/mo) because of the persistent disk
+  # below; disks are not available on the free instance type.
+  - type: web
+    name: forex-pulse-storefront
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: DATABASE_PATH
+        value: /var/data/forex-pulse.db
+      - key: BASE_URL
+        value: https://4xpulse.com
+      # Secrets below are set by hand in the Render dashboard (sync: false).
+      # Use Stripe TEST keys first; switch to live keys when ready to sell.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: OWNER_PASSCODE
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+    disks:
+      - name: forex-pulse-data
+        mountPath: /var/data
+        sizeGB: 1
