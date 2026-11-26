@@ -14,6 +14,7 @@ const express = require('express');
 const crypto = require('crypto');
 const db = require('./src/db');
 const prices = require('./src/prices');
+const calendar = require('./src/calendar');
 const views = require('./src/views');
 const auth = require('./src/auth');
 const mail = require('./src/mail');
@@ -125,7 +126,10 @@ async function fulfillOrder(session, source) {
 // --- public routes ---------------------------------------------------------
 app.get('/', async (req, res) => {
   try {
-    const { prices: priceList, updatedAt } = await prices.getPrices();
+    const [{ prices: priceList, updatedAt }, cal] = await Promise.all([
+      prices.getPrices(),
+      calendar.getUpcomingEvents(),
+    ]);
     prices.evaluateSignals(db, priceList);
     const priceByPair = Object.fromEntries(priceList.map((p) => [p.pair, p.price]));
     const signals = db.listSignals();
@@ -140,6 +144,7 @@ app.get('/', async (req, res) => {
       newPairsToday,
       unlockedIds: unlockedSignalIds(req),
       priceByPair,
+      calendar: cal,
     }));
   } catch (e) {
     console.error('Homepage error:', e);

@@ -5,9 +5,14 @@ Public, server-backed version of Forex Pulse that can be marketed at
 live prices for the 10 pairs, D1 signals at **$20 each** via Stripe Checkout,
 automatic unlock after payment, and a confirmation email to the buyer.
 
-Layout order: “Forex Pulse” title → live prices → Forex signals ($20 each) →
-daily summary below the signals → D1 note under the signals → risk note +
-Owner link only at the bottom.
+Layout order: dashboard header + headline → stat cards (total / buy /
+sell / neutral, from real signals) → live prices → signal matrix (PAIR /
+D1 / H4 / H1) with a Cards toggle → Forex signals ($20 each) → Performance
+Log → Upcoming News Events (live economic calendar) → daily summary below
+the signals → D1 note under the signals → risk note + Owner link only at
+the bottom. Signals are D1 only, so the matrix H4/H1 columns stay empty; a
+matrix cell shows a neutral “Signal” pill only where an open signal exists
+for that pair.
 
 ## How it works
 
@@ -25,13 +30,28 @@ Owner link only at the bottom.
   Won, hitting SL marks them Lost, automatically, on each price refresh.
   A signal posted today makes its pair flash with a **NEW** badge in the
   prices list; tapping the flashing pair scrolls straight to the signal.
-- **Paywall** — every locked signal clearly says **BUY signal** or **SELL
-  signal** before purchase. Entry, take profit and stop loss stay hidden
-  until paid. Buyer enters name + email → Stripe Checkout ($20, card only,
-  no sales tax) → on payment the signal unlocks automatically and a
-  confirmation email with the full details + a durable unlock link is sent.
-  The unlock is also verified on the `/success` return page, so a slow
-  webhook cannot leave a buyer locked out.
+  Tapping any pair — in the prices list, the matrix, or the Cards view —
+  behaves the same way: a pair with a new signal today jumps to that
+  signal, any other pair opens its price details (open / high / low / prev
+  close, sparkline) in the Live prices list.
+- **Economic calendar** — “Upcoming News Events” below the Performance Log,
+  fed live from Forex Factory’s public weekly calendar feed (free, no key;
+  `src/calendar.js`, 30-minute server cache). Shows the next 8 upcoming
+  USD/EUR/GBP events: currency chip, impact pill (high red / medium amber
+  / low muted), event name, time in UTC, forecast and previous. Values come
+  from the feed only — never from sample data. If the feed cannot be read,
+  the section says it is temporarily unavailable instead of showing stale
+  numbers as if they were live.
+- **Paywall** — a locked signal only says **“Signal available”** before
+  purchase: no BUY/SELL direction, no green/red direction hint, and no
+  entry, take profit, stop loss or RR anywhere on the public page. The
+  Performance Log likewise shows pair + date + status only. Buyer enters
+  name + email → Stripe Checkout ($20, card only, no sales tax) → on
+  payment the signal unlocks automatically and a confirmation email with
+  the full details + a durable unlock link is sent. The unlock is also
+  verified on the `/success` return page, so a slow webhook cannot leave a
+  buyer locked out. (A buyer who has paid sees their own unlocked signal
+  with direction, entry, take profit, stop loss and live pips.)
 - **Daily summary** — auto-built from the signals: today’s date, new
   signals today (buys vs sells), open signals with live pips, anything won
   or lost today, and the D1 reminder.
@@ -111,6 +131,7 @@ not sent and Orders shows the manual-send notice.
 server.js            Express app: public pages, /api, Stripe, owner routes
 src/db.js            SQLite (node:sqlite) — signals + orders
 src/prices.js        Yahoo Finance live prices + Frankfurter daily fallback
+src/calendar.js      Forex Factory weekly calendar feed → upcoming USD/EUR/GBP events
 src/mail.js          Buyer confirmation email via SMTP (nodemailer)
 src/auth.js          Owner passcode session (signed cookie)
 src/views.js         Server-rendered HTML templates
