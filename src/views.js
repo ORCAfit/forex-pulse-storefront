@@ -84,8 +84,9 @@ function priceRow(p, isNew) {
 
 function signalCard(s, opts) {
   const { unlocked, livePips } = opts;
-  const dirCls = s.direction === 'BUY' ? 'buy' : 'sell';
-  const dirLabel = s.direction === 'BUY' ? 'BUY signal' : 'SELL signal';
+  const locked = s.status === 'open' && !unlocked;
+  const dirCls = locked ? '' : (s.direction === 'BUY' ? 'buy' : 'sell');
+  const dirLabel = locked ? 'Signal available' : (s.direction === 'BUY' ? 'BUY signal' : 'SELL signal');
   const statusBadge = s.status === 'open' ? '' : `<span class="tag tag-${s.status}">${s.status.toUpperCase()}</span>`;
   let body;
   if (s.status === 'open' && unlocked) {
@@ -141,10 +142,10 @@ function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToda
 
   const todayNew = summary.newToday;
   const summaryNewList = todayNew.length
-    ? `<ul>${todayNew.map((s) => `<li>${esc(s.pair)} — ${s.direction === 'BUY' ? 'BUY' : 'SELL'}</li>`).join('')}</ul>`
+    ? `<ul>${todayNew.map((s) => `<li>${esc(s.pair)} — new signal</li>`).join('')}</ul>`
     : '<p>No new signals posted today yet.</p>';
   const summaryOpen = summary.openToday.length
-    ? `<ul>${summary.openToday.map((s) => `<li>${esc(s.pair)} ${s.direction} — <b class="${s.pips == null ? '' : s.pips >= 0 ? 'up' : 'down'}">${s.pips == null ? '—' : (s.pips >= 0 ? '+' : '') + s.pips} pips</b></li>`).join('')}</ul>`
+    ? `<ul>${summary.openToday.map((s) => unlockedIds.has(s.id) ? `<li>${esc(s.pair)} ${s.direction} — <b class="${s.pips == null ? '' : s.pips >= 0 ? 'up' : 'down'}">${s.pips == null ? '—' : (s.pips >= 0 ? '+' : '') + s.pips} pips</b></li>` : `<li>${esc(s.pair)}</li>`).join('')}</ul>`
     : '<p>No open signals.</p>';
   const summaryResolved = summary.resolvedToday.length
     ? `<ul>${summary.resolvedToday.map((s) => `<li>${esc(s.pair)} ${s.direction} — ${s.status === 'won' ? 'Won' : 'Lost'}</li>`).join('')}</ul>`
