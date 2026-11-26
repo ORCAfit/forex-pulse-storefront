@@ -1,9 +1,19 @@
 'use strict';
 /**
  * Server-rendered HTML. Layout order (per the owner's spec):
- *   "Forex Pulse" title → live prices → Forex signals ($20 each)
- *   → daily summary below the signals → D1 note under the signals
- *   → risk note + Owner link only at the bottom.
+ *   Dashboard header + headline → stat cards → live prices
+ *   → signal matrix / cards → Forex signals ($20 each)
+ *   → Performance Log → Upcoming News Events (live economic calendar)
+ *   → daily summary below the signals
+ *   → D1 note under the signals → risk note + Owner link only
+ *   at the bottom.
+ *
+ * Public rules (2026-11-26): a locked signal never shows its direction
+ * (no BUY/SELL, no green/red direction hint) — it only says
+ * "Signal available". Entry, take profit and stop loss stay hidden until
+ * paid. The daily summary lists also hide direction for open signals.
+ * Counts (total / buy / sell / neutral, won / lost) are aggregate only
+ * and always computed from the real signals in the database.
  */
 const { PAIRS, pipsFor } = require('./prices');
 
@@ -25,6 +35,173 @@ const fmtTime = (iso) => new Date(iso).toLocaleString('en-US', {
 const fmtDate = (iso) => new Date(iso).toLocaleDateString('en-US', {
   timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
 });
+
+const fmtLogTime = (iso) => new Date(iso).toLocaleString('en-US', {
+  timeZone: 'America/New_York', month: 'short', day: 'numeric',
+  hour: 'numeric', minute: '2-digit',
+});
+
+// Two-letter code for a pair badge, from the base currency (EUR/USD -> EU).
+const pairCode = (pair) => pair.split('/')[0].slice(0, 2).toUpperCase();
+
+// --- Dashboard stat cards (counts from the real signals, never hardcoded) ---
+function statCards(signals) {
+  const total = signals.length;
+  const buys = signals.filter((s) => s.direction === 'BUY').length;
+  const sells = signals.filter((s) => s.direction === 'SELL').length;
+  const neutral = signals.filter((s) => s.direction !== 'BUY' && s.direction !== 'SELL').length;
+  const bolt = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>';
+  const up = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>';
+  const down = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l6 6 4-4 8 8"/><path d="M14 17h7v-7"/></svg>';
+  const minus = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>';
+  const card = (icon, iconCls, num, label) => `<div class="stat-card">
+    <span class="stat-icon ${iconCls}">${icon}</span>
+    <span class="stat-text"><span class="stat-num">${num}</span><span class="stat-label">${label}</span></span>
+  </div>`;
+  return `<section class="stat-grid">
+    ${card(bolt, 'ic-green', total, 'TOTAL SIGNALS')}
+    ${card(up, 'ic-green', buys, 'BUY')}
+    ${card(down, 'ic-red', sells, 'SELL')}
+    ${card(minus, 'ic-amber', neutral, 'NEUTRAL')}
+  </section>`;
+}
+
+// --- Signal matrix: PAIR / D1 / H4 / H1. Only D1 ever has a signal (his
+// signals are D1 only); H4/H1 always show "—". A D1 cell shows a neutral
+// "Signal" pill only where an open signal exists for that pair — never a
+// direction, never entry/TP/SL. Pairs with a signal posted today get a NEW tag.
+function matrixSection(openByPair, newPairsToday) {
+  const rows = PAIRS.map((p) => {
+    const open = openByPair.get(p.pair);
+    const isNew = newPairsToday.has(p.pair);
+    const d1 = open
+      ? '<span class="mx-pill"><span class="mx-dot"></span>Signal</span>'
+      : '<span class="mx-empty">—</span>';
+    const dash = '<span class="mx-empty">—</span>';
+    return `<tr class="mx-row" data-pair="${esc(p.pair)}" data-has-signal="${open ? '1' : '0'}" data-new="${isNew ? '1' : ''}">
+      <td><span class="mx-badge">${pairCode(p.pair)}</span><span class="mx-pair">${esc(p.pair)}</span>${isNew ? ' <span class="tag tag-new">NEW</span>' : ''}</td>
+      <td>${d1}</td><td>${dash}</td><td>${dash}</td>
+    </tr>`;
+  }).join('');
+  return `<section class="card matrix-card" id="matrix-view">
+    <div class="matrix-wrap"><table class="matrix">
+      <thead><tr><th>PAIR</th><th>D1</th><th>H4</th><th>H1</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <p class="fine">D1 signals only — the H4 and H1 columns stay empty because every signal here is a daily (D1) signal. Tap a pair to open its price details; a pair with a NEW badge jumps straight to today's signal.</p>
+  </section>`;
+}
+
+// --- Cards view: one card per pair, with live price and signal state.
+function cardsSection(prices, openByPair, newPairsToday) {
+  const priceByPair = Object.fromEntries(prices.map((p) => [p.pair, p]));
+  const cards = PAIRS.map((p) => {
+    const pr = priceByPair[p.pair];
+    const open = openByPair.get(p.pair);
+    const isNew = newPairsToday.has(p.pair);
+    const up = pr && pr.changePct != null ? pr.changePct >= 0 : null;
+    const change = pr && pr.changePct != null ? `${up ? '▲' : '▼'} ${Math.abs(pr.changePct).toFixed(2)}%` : '—';
+    const state = open
+      ? `<button class="btn btn-gold btn-small card-unlock" data-pair="${esc(p.pair)}">Signal available — $20</button>`
+      : '<span class="card-nosig">No signal posted</span>';
+    return `<div class="pair-card" data-pair="${esc(p.pair)}" data-new="${isNew ? '1' : ''}">
+      <div class="pair-card-head"><span class="mx-badge">${pairCode(p.pair)}</span><span class="mx-pair">${esc(p.pair)}</span>${isNew ? ' <span class="tag tag-new">NEW</span>' : ''}</div>
+      <div class="pair-card-price"><span data-live-price="${esc(p.pair)}">${fmtPrice(p.pair, pr ? pr.price : null)}</span>
+      <span class="pair-change ${up === null ? '' : up ? 'up' : 'down'}" data-live-change="${esc(p.pair)}">${change}</span></div>
+      ${state}
+    </div>`;
+  }).join('');
+  return `<section class="card cards-card" id="cards-view" hidden><div class="cards-grid">${cards}</div></section>`;
+}
+
+// --- Performance Log: counts + one row per signal. Rows show pair, date and
+// status only — never direction, entry, take profit, stop loss or RR.
+// Open signals get an unlock button; finished signals show their outcome.
+// Filter pills are by outcome (ALL / OPEN / WON / LOST): filtering by
+// direction would reveal each pair's buy/sell, which stays hidden.
+function logSection(signals) {
+  const total = signals.length;
+  const buys = signals.filter((s) => s.direction === 'BUY').length;
+  const sells = signals.filter((s) => s.direction === 'SELL').length;
+  const neutral = total - buys - sells;
+  const shown = signals.slice(0, 50);
+  const rows = shown.map((s, i) => {
+    const isOpen = s.status === 'open';
+    const statusTag = s.status === 'open' ? '<span class="tag tag-open">OPEN</span>'
+      : s.status === 'won' ? '<span class="tag tag-won">WON</span>'
+      : s.status === 'lost' ? '<span class="tag tag-lost">LOST</span>'
+      : '<span class="tag tag-closed">CLOSED</span>';
+    const action = isOpen
+      ? `<button class="btn btn-gold btn-small log-unlock" data-pair="${esc(s.pair)}">Signal available — unlock for $20</button>`
+      : '<span class="log-closed-note">Signal closed</span>';
+    return `<div class="log-row" data-status="${s.status}">
+      <span class="log-idx">${i + 1}</span>
+      <span class="log-pair">${esc(s.pair)}</span>
+      <span class="log-tf">D1</span>
+      ${statusTag}
+      <span class="log-date">${fmtLogTime(s.created_at)}</span>
+      ${action}
+    </div>`;
+  }).join('');
+  return `<section class="card log-card">
+    <div class="log-head">
+      <h2>Performance Log</h2>
+      <span class="log-badge">${total} signal${total === 1 ? '' : 's'}</span>
+      <div class="log-filters">
+        <button class="pill active" data-filter="all">ALL</button>
+        <button class="pill" data-filter="open">OPEN</button>
+        <button class="pill" data-filter="won">WON</button>
+        <button class="pill" data-filter="lost">LOST</button>
+      </div>
+    </div>
+    <div class="log-tiles">
+      <div class="log-tile"><span class="log-tile-num num-buy">${buys}</span><span class="log-tile-label">BUY SIGNALS</span></div>
+      <div class="log-tile"><span class="log-tile-num num-sell">${sells}</span><span class="log-tile-label">SELL SIGNALS</span></div>
+      <div class="log-tile"><span class="log-tile-num num-neutral">${neutral}</span><span class="log-tile-label">NEUTRAL</span></div>
+    </div>
+    ${shown.length ? `<div class="log-rows">${rows}</div>${total > shown.length ? `<p class="fine">Showing the ${shown.length} most recent signals.</p>` : ''}` : '<p class="empty">No signals posted yet.</p>'}
+  </section>`;
+}
+
+// --- Upcoming News Events / Economic Calendar: live events from Forex
+// Factory's public calendar feed (see src/calendar.js). Rows show currency
+// chip, impact pill, event name, time in UTC, forecast and previous —
+// values come from the feed, never from sample data. If the feed is down
+// the section says so instead of showing stale numbers as if they were live.
+function calendarSection(cal) {
+  const news = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>';
+  const clock = '<svg class="cal-clock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+  const flame = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
+  // Day + time in UTC (events span several days, so the weekday is shown).
+  const fmtCalTime = (iso) => {
+    const d = new Date(iso);
+    const day = d.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short' });
+    const hm = d.toLocaleTimeString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false });
+    return `${day} ${hm} UTC`;
+  };
+  const rows = cal.events.map((e) => {
+    const impactCls = e.impact === 'High' ? 'impact-high' : e.impact === 'Medium' ? 'impact-medium' : 'impact-low';
+    const impactIcon = e.impact === 'High' ? flame : '';
+    const f = e.forecast ? esc(e.forecast) : '—';
+    const p = e.previous ? esc(e.previous) : '—';
+    return `<div class="cal-row">
+      <div class="cal-top"><span class="cal-ccy">${esc(e.currency)}</span><span class="cal-impact ${impactCls}">${impactIcon}${e.impact.toLowerCase()}</span></div>
+      <div class="cal-title">${esc(e.title)}</div>
+      <div class="cal-meta">${clock} ${fmtCalTime(e.date)}&nbsp;&nbsp;F: ${f}&nbsp;&nbsp;P: ${p}</div>
+    </div>`;
+  }).join('');
+  const body = !cal.ok
+    ? '<p class="empty">Economic calendar temporarily unavailable — please check back shortly.</p>'
+    : cal.events.length
+      ? `<div class="cal-rows">${rows}</div>`
+      : '<p class="empty">No USD, EUR or GBP events scheduled for the rest of this week.</p>';
+  return `<h2 class="section-title">Upcoming News Events</h2>
+<section class="card cal-card">
+  <div class="cal-head"><span class="cal-head-title">${news} Economic Calendar</span><span class="cal-range">This week</span></div>
+  ${body}
+  <p class="fine">Source: Forex Factory economic calendar. Times in UTC.</p>
+</section>`;
+}
 
 function sparklineSvg(points, up) {
   if (!points || points.length < 2) return '<span class="spark-empty">—</span>';
@@ -84,6 +261,7 @@ function priceRow(p, isNew) {
 
 function signalCard(s, opts) {
   const { unlocked, livePips } = opts;
+  // Locked signals never show direction (no BUY/SELL, no green/red hint).
   const locked = s.status === 'open' && !unlocked;
   const dirCls = locked ? '' : (s.direction === 'BUY' ? 'buy' : 'sell');
   const dirLabel = locked ? 'Signal available' : (s.direction === 'BUY' ? 'BUY signal' : 'SELL signal');
@@ -124,9 +302,8 @@ function signalCard(s, opts) {
   </article>`;
 }
 
-function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToday, unlockedIds, priceByPair }) {
+function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToday, unlockedIds, priceByPair, calendar }) {
   const openSignals = signals.filter((s) => s.status === 'open');
-  const history = signals.filter((s) => s.status !== 'open');
   const filterOptions = ['All pairs', ...PAIRS.map((p) => p.pair)]
     .map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
   const priceRows = prices.map((p) => priceRow(p, newPairsToday.has(p.pair))).join('');
@@ -136,9 +313,8 @@ function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToda
         livePips: pipsFor(s, priceByPair[s.pair]),
       })).join('')
     : '<p class="empty">No open signals right now. Check back after the 5:00 PM New York update.</p>';
-  const historyCards = history.length
-    ? history.map((s) => signalCard(s, { unlocked: true, livePips: null })).join('')
-    : '<p class="empty">No finished signals yet.</p>';
+  const openByPair = new Map();
+  for (const s of openSignals) if (!openByPair.has(s.pair)) openByPair.set(s.pair, s);
 
   const todayNew = summary.newToday;
   const summaryNewList = todayNew.length
@@ -148,14 +324,29 @@ function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToda
     ? `<ul>${summary.openToday.map((s) => unlockedIds.has(s.id) ? `<li>${esc(s.pair)} ${s.direction} — <b class="${s.pips == null ? '' : s.pips >= 0 ? 'up' : 'down'}">${s.pips == null ? '—' : (s.pips >= 0 ? '+' : '') + s.pips} pips</b></li>` : `<li>${esc(s.pair)}</li>`).join('')}</ul>`
     : '<p>No open signals.</p>';
   const summaryResolved = summary.resolvedToday.length
-    ? `<ul>${summary.resolvedToday.map((s) => `<li>${esc(s.pair)} ${s.direction} — ${s.status === 'won' ? 'Won' : 'Lost'}</li>`).join('')}</ul>`
+    ? `<ul>${summary.resolvedToday.map((s) => `<li>${esc(s.pair)} — ${s.status === 'won' ? 'Won' : 'Lost'}</li>`).join('')}</ul>`
     : '<p>Nothing won or lost today.</p>';
 
   return layout('Forex Pulse', `
-<header class="site-head">
-  <h1 class="brand">Forex Pulse</h1>
-  <p class="tagline">Live prices &amp; daily D1 signals — $20 per signal</p>
+<header class="dash-head">
+  <div class="dash-brand">
+    <span class="logo-mark"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l3-8 4 16 3-8h6"/></svg></span>
+    <span class="brand-text"><span class="brand-name">Forex Pulse</span><span class="brand-sub">SIGNAL</span></span>
+  </div>
+  <a class="dash-icon" href="#signals" aria-label="Go to signals"><svg width="22" height="22" viewBox="0 0 24 24" fill="#22c55e" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg></a>
 </header>
+
+<section class="dash-intro">
+  <p class="dash-label">Signal Dashboard</p>
+  <h1 class="dash-title">Real-time forex signals across all major pairs</h1>
+  <p class="dash-sub">Live prices &amp; daily D1 signals — $20 per signal</p>
+  <div class="view-toggle">
+    <button class="view-btn active" data-view="matrix">Matrix</button>
+    <button class="view-btn" data-view="cards">Cards</button>
+  </div>
+</section>
+
+${statCards(signals)}
 
 <section class="card">
   <div class="section-head">
@@ -170,7 +361,10 @@ function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToda
   <p class="fine">Pairs flashing with a NEW badge have a new signal posted today — tap the flashing pair to view it.</p>
 </section>
 
-<section class="card">
+${matrixSection(openByPair, newPairsToday)}
+${cardsSection(prices, openByPair, newPairsToday)}
+
+<section class="card" id="signals">
   <h2>Forex Signals</h2>
   <p class="d1-note">This is a D1 signal — a day signal only. All trades must be made in the D1 signal trend. H4, H1, M30 or M15 entries must be made in the D1 signal trend.</p>
   <div class="signals-toolbar">
@@ -180,9 +374,11 @@ function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToda
     <span class="winloss">Past results — Won: ${winLoss.won} — Lost: ${winLoss.lost}</span>
   </div>
   <div id="signal-list">${signalCards}</div>
-  <h3 class="subhead">Past results</h3>
-  <div id="history-list">${historyCards}</div>
 </section>
+
+${logSection(signals)}
+
+${calendarSection(calendar || { events: [], ok: false })}
 
 <section class="card summary-card">
   <h2>Today — ${esc(summary.dateLabel)}</h2>
