@@ -48,6 +48,14 @@
         }
         const spark = row.querySelector('.spark, .spark-empty');
         if (spark) spark.outerHTML = sparklineSvg(p.sparkline, up);
+        const livePrice = document.querySelector('[data-live-price="' + p.pair + '"]');
+        if (livePrice) livePrice.textContent = fmt(p.pair, p.price);
+        const liveChange = document.querySelector('[data-live-change="' + p.pair + '"]');
+        if (liveChange) {
+          liveChange.textContent = p.changePct == null ? '—'
+            : (up ? '▲ ' : '▼ ') + Math.abs(p.changePct).toFixed(2) + '%';
+          liveChange.className = 'pair-change ' + (up === null ? '' : up ? 'up' : 'down');
+        }
         const detail = row.querySelector('.pair-detail');
         if (detail && p.price != null) {
           const spans = detail.querySelectorAll('span');
@@ -61,6 +69,56 @@
       console.error('Price refresh failed', e);
     }
   }
+
+  // Matrix row / pair card: tapping a pair behaves exactly like tapping
+  // its price row — a pair with a new signal today jumps straight to that
+  // signal; any other pair opens its price details (open / high / low /
+  // prev close, sparkline) in the Live prices list.
+  document.addEventListener('click', function (e) {
+    const jump = e.target.closest('.card-unlock, .log-unlock');
+    if (jump) {
+      scrollToPairSignal(jump.getAttribute('data-pair'));
+      return;
+    }
+    const el = e.target.closest('.mx-row, .pair-card');
+    if (!el) return;
+    const pair = el.getAttribute('data-pair');
+    if (el.getAttribute('data-new') === '1') {
+      scrollToPairSignal(pair);
+      return;
+    }
+    const row = document.querySelector('.pair-row[data-pair="' + pair + '"]');
+    if (!row) return;
+    row.classList.add('open');
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  // Matrix / Cards view toggle.
+  document.querySelectorAll('.view-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.view-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      const matrix = document.getElementById('matrix-view');
+      const cards = document.getElementById('cards-view');
+      const showCards = btn.getAttribute('data-view') === 'cards';
+      if (matrix) matrix.hidden = showCards;
+      if (cards) cards.hidden = !showCards;
+      const target = showCards ? cards : matrix;
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+
+  // Performance Log filters (by outcome: open / won / lost).
+  document.querySelectorAll('.log-filters .pill').forEach(function (pill) {
+    pill.addEventListener('click', function () {
+      document.querySelectorAll('.log-filters .pill').forEach(function (p) { p.classList.remove('active'); });
+      pill.classList.add('active');
+      const f = pill.getAttribute('data-filter');
+      document.querySelectorAll('.log-row').forEach(function (row) {
+        row.style.display = (f === 'all' || row.getAttribute('data-status') === f) ? '' : 'none';
+      });
+    });
+  });
 
   // Pair rows: tap a NEW pair to jump to its signal; otherwise expand day range.
   document.addEventListener('click', function (e) {
