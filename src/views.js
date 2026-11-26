@@ -166,6 +166,7 @@ function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToda
   </div>
   <div id="price-list">${priceRows}</div>
   <p class="fine">Prices refresh every 30 minutes. Pairs marked “Daily rate” use the daily reference rate, not a live tick.</p>
+  <p class="fine">Pairs flashing with a NEW badge have a new signal posted today — tap the flashing pair to view it.</p>
 </section>
 
 <section class="card">
