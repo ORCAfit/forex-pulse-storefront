@@ -385,7 +385,7 @@ function indicatorsSection(avail) {
   <div class="license-box">
     <h3>License terms</h3>
     <p>Copyright (C) 2026 DEUS. All rights reserved.</p>
-    <p>Sold as a license for the buyer's own use only. The buyer may run the indicator on their own charts, but may NOT copy, share, repost, resell or redistribute it, in whole or in part, without DEUS's written permission. One-time purchase, no expiration date. MT4 proprietary indicator files only — the .mq4 source code is not included and is not for sale. Not public domain.</p>
+    <p>Sold as a license for the buyer's own use only. The buyer may run the indicator on their own charts, but may NOT copy, share, repost, resell or redistribute it, in whole or in part, without DEUS's written permission. One-time purchase, no expiration date. MT4 proprietary indicator files only.</p>
   </div>
   <p class="fine"><b>Analytical only.</b> These tools analyse and display information. They do not place, modify, or close trades, and they are not financial advice.</p>
   <p class="fine"><b>MT4 only, history matters.</b> Requires MetaTrader 4. Load at least 100 days of H1 history; with too little history the dashboard correctly shows INSUFFICIENT DATA / DATA UNAVAILABLE.</p>
