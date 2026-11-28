@@ -348,7 +348,7 @@ function indicatorsSection(avail) {
         <li>Traders who watch multiple pairs at once</li>
         <li>Anyone who wants levels plus probability, not just lines</li>
       </ul>
-      <p class="fine">Includes: compiled .ex4, 8 documents, 3 presets, Sample_Scoreboard.csv, and install guide.</p>
+      <p class="fine">Includes: MT4 proprietary indicator, 8 documents, 3 presets, Sample_Scoreboard.csv, and install guide.</p>
       <p class="ind-price">${flr.priceLabel} <span class="ind-per">one-time · launch price</span></p>
       ${buyForm(flr)}
     </article>
@@ -370,7 +370,7 @@ function indicatorsSection(avail) {
         <li>Traders who overtrade and want a filter first</li>
         <li>Pairing with FLR: FBPI for direction, FLR for the level</li>
       </ul>
-      <p class="fine">Includes: compiled .ex4 (single-file build), 11 documents, 3 presets, sample CSVs, and install guide.</p>
+      <p class="fine">Includes: MT4 proprietary indicator (single-file build), 11 documents, 3 presets, sample CSVs, and install guide.</p>
       <p class="ind-price">${fbpi.priceLabel} <span class="ind-per">one-time · launch price</span></p>
       ${buyForm(fbpi)}
     </article>
@@ -385,7 +385,7 @@ function indicatorsSection(avail) {
   <div class="license-box">
     <h3>License terms</h3>
     <p>Copyright (C) 2026 DEUS. All rights reserved.</p>
-    <p>Sold as a license for the buyer's own use only. The buyer may run the indicator on their own charts, but may NOT copy, share, repost, resell or redistribute it, in whole or in part, without DEUS's written permission. One-time purchase, no expiration date. Compiled .ex4 files only — the .mq4 source code is not included and is not for sale. Not public domain.</p>
+    <p>Sold as a license for the buyer's own use only. The buyer may run the indicator on their own charts, but may NOT copy, share, repost, resell or redistribute it, in whole or in part, without DEUS's written permission. One-time purchase, no expiration date. MT4 proprietary indicator files only — the .mq4 source code is not included and is not for sale. Not public domain.</p>
   </div>
   <p class="fine"><b>Analytical only.</b> These tools analyse and display information. They do not place, modify, or close trades, and they are not financial advice.</p>
   <p class="fine"><b>MT4 only, history matters.</b> Requires MetaTrader 4. Load at least 100 days of H1 history; with too little history the dashboard correctly shows INSUFFICIENT DATA / DATA UNAVAILABLE.</p>
