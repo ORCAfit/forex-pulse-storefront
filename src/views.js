@@ -334,7 +334,7 @@ function indicatorsSection(avail) {
       <h3>Forex Level Radar Pro</h3>
       <p class="fine">FLR-MT4-001 — Key Levels, Probabilities &amp; Session Dashboard</p>
       <img class="ind-shot" src="/flr-dashboard.png" alt="Forex Level Radar Pro dashboard box — key levels, touch probabilities and scoreboard" loading="lazy">
-      <p>Forex Level Radar Pro puts the levels that matter on one dark, clean dashboard — so you can see where price is, what it has already touched, and which level is most likely to be tested next, without drawing lines by hand all morning. Built for MT4 across 15 pairs, FLR runs 7 engines at once: key levels, touch probability, session intelligence, liquidity sweeps vs. breakouts, candle analysis, and a Brier-score scoreboard that tracks how its own probabilities performed. It is analytical only — it never places, modifies, or closes a trade.</p>
+      <p>Forex Level Radar Pro puts the levels that matter on one clean dashboard — so you can see where price is, what it has already touched, and which level is most likely to be tested next, without drawing lines by hand all morning. Built for MT4 across 15 pairs, FLR runs 7 engines at once: key levels, touch probability, session intelligence, liquidity sweeps vs. breakouts, candle analysis, and a Brier-score scoreboard that tracks how its own probabilities performed. It is analytical only — it never places, modifies, or closes a trade.</p>
       <h4>What FLR shows</h4>
       <ul class="ind-list">
         <li>Key levels: Previous Day High / Low / Close / Open (PDH / PDL / PDC / PDO), session highs and lows, opening range</li>
