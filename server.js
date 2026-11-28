@@ -18,6 +18,7 @@ const calendar = require('./src/calendar');
 const views = require('./src/views');
 const auth = require('./src/auth');
 const mail = require('./src/mail');
+const indicators = require('./src/indicators');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -56,7 +57,13 @@ app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), async (r
   }
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-    await fulfillOrder(session, 'webhook');
+    // Signal orders and indicator orders share the webhook; metadata.kind
+    // (set when the Checkout session is created) tells them apart.
+    if (session.metadata && session.metadata.kind === 'indicator') {
+      await fulfillIndicatorOrder(session, 'webhook');
+    } else {
+      await fulfillOrder(session, 'webhook');
+    }
   }
   res.json({ received: true });
 });
@@ -123,6 +130,38 @@ async function fulfillOrder(session, source) {
   return paid;
 }
 
+// --- indicator orders ------------------------------------------------------
+// Same pattern as signals: mark paid (idempotent), then email the buyer a
+// durable download link for the compiled .ex4 file(s).
+async function sendIndicatorEmailForOrder(order) {
+  const product = indicators.PRODUCTS[order.product];
+  if (!product) return;
+  const downloadUrl = `${BASE_URL}/download/${order.access_token}`;
+  const files = indicators.productDownloads(product).map((d) => d.filename);
+  const result = await mail.sendIndicatorEmail({
+    buyerName: order.buyer_name,
+    buyerEmail: order.buyer_email,
+    productName: product.name,
+    amountLabel: `$${(order.amount_cents / 100).toFixed(2)}`,
+    downloadUrl,
+    files,
+  });
+  if (result.sent) db.setIndicatorOrderEmailStatus(order.id, 'sent');
+  else if (result.reason === 'not_configured') db.setIndicatorOrderEmailStatus(order.id, 'not_configured');
+  else db.setIndicatorOrderEmailStatus(order.id, 'failed', result.error || 'unknown error');
+}
+
+/** Mark an indicator order paid (idempotent) and send the download email. */
+async function fulfillIndicatorOrder(session, source) {
+  const order = db.getIndicatorOrderBySession(session.id);
+  if (!order) { console.error(`[${source}] No indicator order for Stripe session ${session.id}`); return null; }
+  if (order.status === 'paid') return db.getIndicatorOrder(order.id);
+  const paid = db.markIndicatorOrderPaid(order.id, session.payment_intent || null);
+  await sendIndicatorEmailForOrder(paid);
+  console.log(`[${source}] Indicator order #${paid.id} paid; ${paid.product} ($${(paid.amount_cents / 100).toFixed(2)}) for ${paid.buyer_email}`);
+  return db.getIndicatorOrder(paid.id);
+}
+
 // --- public routes ---------------------------------------------------------
 app.get('/', async (req, res) => {
   try {
@@ -145,6 +184,7 @@ app.get('/', async (req, res) => {
       unlockedIds: unlockedSignalIds(req),
       priceByPair,
       calendar: cal,
+      indicatorAvailability: indicators.availability(),
     }));
   } catch (e) {
     console.error('Homepage error:', e);
@@ -198,6 +238,51 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
+// Create an indicator order + Stripe Checkout session.
+// GATED ON FILE PRESENCE: if the .ex4 file(s) for the product are not in
+// downloads/, checkout never starts — nobody can pay for a file that
+// cannot be delivered.
+app.post('/api/indicator-orders', async (req, res) => {
+  const { product: productId, name, email } = req.body || {};
+  const product = indicators.PRODUCTS[productId];
+  if (!product) return res.status(404).json({ error: 'Indicator not available.' });
+  if (!name || typeof name !== 'string' || !email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ error: 'Please provide your name and a valid email.' });
+  }
+  if (!indicators.isAvailable(product)) {
+    return res.status(409).json({ error: 'This indicator is not available yet — its download file has not been published. Please check back soon.' });
+  }
+  if (!stripe) return res.status(503).json({ error: 'Payments are not configured yet. Please try again later.' });
+  const token = crypto.randomBytes(24).toString('hex');
+  const order = db.createIndicatorOrder({
+    product: product.id, buyerName: name.trim(), buyerEmail: email.trim(),
+    accessToken: token, amountCents: product.priceCents,
+  });
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          unit_amount: product.priceCents,
+          product_data: { name: `Forex Pulse — ${product.name} (MT4 indicator)` },
+        },
+        quantity: 1,
+      }],
+      metadata: { order_id: String(order.id), kind: 'indicator', product: product.id },
+      customer_email: order.buyer_email,
+      success_url: `${BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${BASE_URL}/?checkout=cancelled`,
+    });
+    db.setIndicatorOrderSession(order.id, session.id);
+    res.json({ checkoutUrl: session.url });
+  } catch (e) {
+    console.error('Stripe indicator checkout error:', e.message);
+    res.status(500).json({ error: 'Could not start checkout. Please try again.' });
+  }
+});
+
 // Return from Stripe Checkout — verify payment server-side (covers webhooks
 // that arrive late) and show the unlocked signal.
 app.get('/success', async (req, res) => {
@@ -205,6 +290,15 @@ app.get('/success', async (req, res) => {
   if (!stripe || !sessionId) return res.send(views.successPage({ order: null, signal: null }));
   try {
     const session = await stripe.checkout.sessions.retrieve(String(sessionId));
+    // Indicator purchase: fulfill the indicator order and show its download.
+    if (session.metadata && session.metadata.kind === 'indicator') {
+      const iorder = db.getIndicatorOrderBySession(session.id);
+      if (session.payment_status === 'paid' && iorder) {
+        const paid = await fulfillIndicatorOrder(session, 'success-page');
+        return res.send(views.indicatorSuccessPage({ order: paid, emailSent: paid.email_status === 'sent' }));
+      }
+      return res.send(views.indicatorSuccessPage({ order: null }));
+    }
     let order = db.getOrderBySession(session.id);
     if (session.payment_status === 'paid' && order) {
       order = await fulfillOrder(session, 'success-page');
@@ -240,6 +334,42 @@ app.get('/unlock/:token', (req, res) => {
   res.send(views.unlockPage({ order, signal }));
 });
 
+// --- indicator downloads (token-gated, .ex4 only) ---------------------------
+// Durable download page for a paid indicator order (also emailed to the
+// buyer). Lists one download link per file the order includes.
+app.get('/download/:token', (req, res) => {
+  const order = db.getIndicatorOrderByToken(req.params.token);
+  if (!order || order.status !== 'paid') {
+    return res.status(404).send(views.indicatorDownloadPage({ order: null }));
+  }
+  res.send(views.indicatorDownloadPage({ order }));
+});
+
+// Serve one compiled .ex4 file. The product id is checked against the
+// order (a single-indicator order downloads only its own file; a bundle
+// downloads either), and the filename comes from a whitelist in
+// src/indicators.js — never from the request — so no other file, and
+// never the .mq4 source, can be reached through this route.
+app.get('/download/:token/:product', (req, res) => {
+  const order = db.getIndicatorOrderByToken(req.params.token);
+  if (!order || order.status !== 'paid') {
+    return res.status(404).send('Download not found. If you paid for an indicator, check your confirmation email for the correct link.');
+  }
+  const productId = req.params.product;
+  const allowed = order.product === 'bundle'
+    ? ['flr', 'fbpi'].includes(productId)
+    : order.product === productId;
+  if (!allowed) return res.status(404).send('Download not found.');
+  const fullPath = indicators.downloadPath(productId);
+  if (!fullPath) {
+    return res.status(404).send('This download is not available yet. Please contact Forex Pulse — your payment is recorded and the file will be sent to you.');
+  }
+  const filename = indicators.PRODUCTS[productId].file;
+  res.download(fullPath, filename, (err) => {
+    if (err && !res.headersSent) res.status(404).send('Download not available. Please try again or contact Forex Pulse.');
+  });
+});
+
 // --- owner routes ----------------------------------------------------------
 app.get('/owner/login', (req, res) => {
   if (auth.ownerLoggedIn(req)) return res.redirect('/owner');
@@ -263,6 +393,7 @@ app.get('/owner', auth.requireOwner, (req, res) => {
   res.send(views.ownerPage({
     signals: db.listSignals(),
     orders: db.listOrders(),
+    indicatorOrders: db.listIndicatorOrders(),
     smtpConfigured: mail.smtpConfigured(),
     notice: req.query.notice || null,
     error: req.query.error || null,
@@ -312,6 +443,20 @@ app.post('/owner/orders/:id/resend', auth.requireOwner, async (req, res) => {
   const msg = after.email_status === 'sent'
     ? `Confirmation email sent to ${after.buyer_email}.`
     : `Email could not be sent (${after.email_status}). Buyer email and signal details are shown in Orders — send it manually.`;
+  res.redirect('/owner?notice=' + encodeURIComponent(msg));
+});
+
+// Re-send the download email for a paid indicator order.
+app.post('/owner/indicator-orders/:id/resend', auth.requireOwner, async (req, res) => {
+  const order = db.getIndicatorOrder(Number(req.params.id));
+  if (!order) return res.redirect('/owner?error=' + encodeURIComponent('Indicator order not found.'));
+  if (order.status !== 'paid') return res.redirect('/owner?error=' + encodeURIComponent('Only paid orders can be emailed.'));
+  await sendIndicatorEmailForOrder(order);
+  const after = db.getIndicatorOrder(order.id);
+  const product = indicators.PRODUCTS[after.product];
+  const msg = after.email_status === 'sent'
+    ? `Download email sent to ${after.buyer_email}.`
+    : `Email could not be sent (${after.email_status}). Send the download link manually: ${BASE_URL}/download/${after.access_token} for ${product ? product.name : after.product}.`;
   res.redirect('/owner?notice=' + encodeURIComponent(msg));
 });
 

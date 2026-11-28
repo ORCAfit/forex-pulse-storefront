@@ -141,6 +141,46 @@ render.yaml          Render Blueprint (service + persistent disk + env vars)
 .env.example         Every env var, with no real secrets
 ```
 
+## MT4 Indicators (added 2026-11-28, not yet live — needs the .ex4 files)
+
+A new **MT4 Indicators** section sits on the homepage between the Forex
+signals and the Performance Log. It introduces both original indicators
+with the listing copy (what each does, who it is for), the launch prices,
+and the license terms.
+
+| Product | Price | .ex4 file |
+| --- | --- | --- |
+| Forex Level Radar Pro (FLR-MT4-001) | $149 one-time | `downloads/Forex_Level_Radar_Pro_V.ex4` |
+| Forex Bigger Picture Intelligence (FBPI-MT4-001) | $199 one-time | `downloads/FBPI_Main_SingleFile_V.ex4` |
+| Bundle — both | $299 one-time (save $49) | both files |
+
+One-time purchase, no expiration, no sales tax. License: Copyright (C)
+2026 DEUS — the buyer may run the indicator on their own charts but may
+NOT copy, share, repost, resell or redistribute it. Compiled .ex4 only —
+the .mq4 source is never sold or served.
+
+**How it works:** each product has a Buy form (name + email) → Stripe
+Checkout with inline `price_data` (same pattern as the $20 signals) →
+webhook or `/success` verification marks the indicator order paid →
+buyer gets a durable download link by email and on the success page.
+Downloads are token-gated (`/download/:token/:product`); the filename
+comes from a whitelist in `src/indicators.js`, never from the request.
+
+**Gating — nothing can be bought before the files exist.** The Buy button
+for a product stays disabled ("Coming soon") and `/api/indicator-orders`
+refuses to start checkout until that product's .ex4 file is in
+`downloads/`. See `downloads/README.md`.
+
+**Still needed from Demetrius before this goes live:** compile the two
+`_V` .mq4 files in MetaEditor (F7) and send the two .ex4 files so they
+can be committed to `downloads/`. Without them the section shows, but
+nothing can be purchased.
+
+**Known gap:** the listing's "Includes" line mentions documents, presets
+and the install guide, but the storefront currently delivers only the
+.ex4 file(s). The docs/presets still need packaging (or the Includes line
+needs adjusting) before launch.
+
 ## What was verified here (2026-11-24)
 
 - Yahoo Finance chart API returns live quotes for **all 10 pairs**
