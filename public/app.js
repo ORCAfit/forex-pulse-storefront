@@ -205,6 +205,44 @@
     }
   });
 
+  // Indicator purchase: same Stripe Checkout pattern as signals, one
+  // session per product (FLR $149 / FBPI $199 / bundle $299).
+  document.addEventListener('submit', async function (e) {
+    const form = e.target.closest('.indicator-order-form');
+    if (!form) return;
+    e.preventDefault();
+    const product = form.getAttribute('data-product');
+    const name = form.querySelector('input[name="name"]').value.trim();
+    const email = form.querySelector('input[name="email"]').value.trim();
+    if (!name || !email || email.indexOf('@') < 0) {
+      alert('Please enter your name and a valid email.');
+      return;
+    }
+    const btn = form.querySelector('button[type="submit"]');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Starting secure checkout…';
+    try {
+      const res = await fetch('/api/indicator-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product: product, name: name, email: email }),
+      });
+      const data = await res.json();
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        alert(data.error || 'Could not start checkout. Please try again.');
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    } catch (err) {
+      alert('Could not start checkout. Please try again.');
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  });
+
   const refreshBtn = document.getElementById('refresh-btn');
   if (refreshBtn) refreshBtn.addEventListener('click', refreshPrices);
   setInterval(refreshPrices, 30 * 60 * 1000); // auto-refresh every 30 minutes

@@ -390,6 +390,25 @@ input, select {
 .tbl th { color: var(--muted); }
 .manual-send { margin-top: 6px; font-size: 0.82rem; background: #1a2438; padding: 8px; border-radius: 6px; }
 
+/* MT4 Indicators */
+.ind-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin: 14px 0; }
+@media (min-width: 760px) { .ind-grid { grid-template-columns: 1fr 1fr; } .ind-bundle { grid-column: 1 / -1; } }
+.ind-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.ind-card h3 { color: var(--text); margin: 0 0 4px; font-size: 1.15rem; }
+.ind-card h4 { color: var(--gold); margin: 14px 0 6px; font-size: 0.95rem; }
+.ind-list { margin: 6px 0; padding-left: 18px; color: var(--muted); font-size: 0.92rem; }
+.ind-list li { margin: 3px 0; }
+.ind-price { font-size: 1.5rem; font-weight: 800; color: var(--gold); margin: 14px 0 10px; }
+.ind-per { font-size: 0.85rem; font-weight: 400; color: var(--muted); }
+.ind-save { font-size: 0.85rem; font-weight: 700; color: var(--green); }
+.ind-shot { display: block; max-width: 100%; height: auto; margin: 10px auto 4px; border: 1px solid var(--border); border-radius: 8px; }
+.indicator-order-form { margin-top: 10px; }
+.indicator-order-form input { width: 100%; margin: 4px 0 8px; }
+.btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+.license-box { background: var(--bg2); border: 1px solid var(--gold-dim); border-radius: 10px; padding: 14px; margin-top: 16px; }
+.license-box h3 { color: var(--gold); margin: 0 0 8px; font-size: 1.05rem; }
+.license-box p { margin: 6px 0; font-size: 0.92rem; }
+
 /* Footer / misc */
 .site-foot { text-align: center; margin-top: 8px; }
 .risk-note { color: var(--amber); font-weight: 700; }
