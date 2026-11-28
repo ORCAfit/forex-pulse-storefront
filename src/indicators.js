@@ -4,15 +4,22 @@
  * One-time purchase, no expiration, no sales tax — same terms as the
  * $20 signals.
  *
- * ONLY compiled .ex4 files are ever sold or served. The .mq4 source is
- * never placed in downloads/ and no route serves it.
+ * Each product downloads as a ZIP PACKAGE, not a bare .ex4 file. The zip
+ * holds the compiled .ex4 plus the documents, presets, sample data and
+ * install guide the page's "Includes" line promises (see PACKAGING.md
+ * for the exact layout and build commands).
+ *
+ * ONLY the compiled .ex4 is ever sold or served, inside its zip. The
+ * .mq4 source is never placed in downloads/ and no route serves it —
+ * the build script refuses to package any .mq4 file.
  *
  * The .ex4 files do not exist yet — Demetrius compiles them in MetaEditor
- * (F7) from the _V .mq4 files on his laptop and drops them in downloads/
- * (see downloads/README.md). A product can only be bought when its .ex4
- * file is present: the buy button stays disabled ("Coming soon") until
- * then, and the checkout API refuses to start a session, so nobody can
- * pay for a file that cannot be delivered.
+ * (F7) from the _V .mq4 files on his laptop; the zips are then built
+ * from the .ex4 files and placed in downloads/ (see PACKAGING.md and
+ * downloads/README.md). A product can only be bought when its ZIP is
+ * present: the buy button stays disabled ("Coming soon") until then,
+ * and the checkout API refuses to start a session, so nobody can pay
+ * for a package that cannot be delivered.
  */
 const fs = require('fs');
 const path = require('path');
@@ -26,7 +33,18 @@ const PRODUCTS = {
     code: 'FLR-MT4-001',
     priceCents: 14900,
     priceLabel: '$149',
-    file: 'Forex_Level_Radar_Pro_V.ex4',
+    // The zip package this purchase downloads.
+    file: 'Forex_Level_Radar_Pro.zip',
+    // The compiled indicator inside the zip.
+    ex4File: 'Forex_Level_Radar_Pro_V.ex4',
+    // Human-readable package contents, shown on the download page and
+    // in the buyer email.
+    contents: [
+      'Forex_Level_Radar_Pro_V.ex4 — the compiled indicator',
+      '8 documents, including the Installation Guide and User Manual',
+      '3 presets: Standard, Conservative, Aggressive (.set files)',
+      'Sample_Scoreboard.csv + Sample_Scoreboard.README.md',
+    ],
   },
   fbpi: {
     id: 'fbpi',
@@ -34,7 +52,14 @@ const PRODUCTS = {
     code: 'FBPI-MT4-001',
     priceCents: 19900,
     priceLabel: '$199',
-    file: 'FBPI_Main_SingleFile_V.ex4',
+    file: 'FBPI_Main_SingleFile.zip',
+    ex4File: 'FBPI_Main_SingleFile_V.ex4',
+    contents: [
+      'FBPI_Main_SingleFile_V.ex4 — the compiled indicator (single-file build)',
+      '11 documents, including the Installation Guide and User Manual',
+      '3 presets: Standard, Conservative, Aggressive (.set files)',
+      'Sample_Scoreboard.csv + Sample_Historical_Statistics.csv',
+    ],
   },
   bundle: {
     id: 'bundle',
@@ -43,15 +68,15 @@ const PRODUCTS = {
     priceCents: 29900,
     priceLabel: '$299',
     saveLabel: 'Save $49',
-    // A bundle delivers both single-indicator files.
-    files: ['Forex_Level_Radar_Pro_V.ex4', 'FBPI_Main_SingleFile_V.ex4'],
+    // A bundle delivers both single-indicator zip packages.
+    files: ['Forex_Level_Radar_Pro.zip', 'FBPI_Main_SingleFile.zip'],
   },
 };
 
 // The single-indicator products, in display order.
 const SINGLE_PRODUCTS = ['flr', 'fbpi'];
 
-// Every file a purchase of this product delivers: [{ productId, filename }]
+// Every package a purchase of this product delivers: [{ productId, filename }]
 function productDownloads(product) {
   if (product.id === 'bundle') {
     return [
@@ -62,13 +87,23 @@ function productDownloads(product) {
   return [{ productId: product.id, filename: product.file }];
 }
 
+// Every package a purchase delivers, with its contents listed for the
+// download page and the buyer email: [{ productId, filename, items }]
+function packageContents(product) {
+  return productDownloads(product).map((d) => ({
+    productId: d.productId,
+    filename: d.filename,
+    items: PRODUCTS[d.productId].contents,
+  }));
+}
+
 function filePresent(filename) {
   try {
     return fs.statSync(path.join(DOWNLOADS_DIR, filename)).isFile();
   } catch (_) { return false; }
 }
 
-// Buyable only when every file the purchase delivers exists on disk.
+// Buyable only when every package the purchase delivers exists on disk.
 function isAvailable(product) {
   return productDownloads(product).every((d) => filePresent(d.filename));
 }
@@ -80,9 +115,10 @@ function availability() {
 }
 
 // Whitelisted download: a single-indicator product id -> absolute path of
-// its .ex4 file, or null if the file is not present. Never serves a path
-// supplied by a request — only these exact names, only from downloads/.
-// Bundles download per indicator (see productDownloads), not as one file.
+// its zip package, or null if the package is not present. Never serves a
+// path supplied by a request — only these exact names, only from
+// downloads/. Bundles download per indicator (see productDownloads),
+// one zip per indicator, not a single combined file.
 function downloadPath(productId) {
   const p = PRODUCTS[productId];
   if (!p || !p.file) return null;
@@ -91,6 +127,6 @@ function downloadPath(productId) {
 
 module.exports = {
   PRODUCTS, SINGLE_PRODUCTS, DOWNLOADS_DIR,
-  productFiles: productDownloads, productDownloads,
+  productFiles: productDownloads, productDownloads, packageContents,
   filePresent, isAvailable, availability, downloadPath,
 };

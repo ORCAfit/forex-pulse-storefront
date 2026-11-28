@@ -56,25 +56,35 @@ async function sendUnlockEmail({ buyerName, buyerEmail, signal, unlockUrl }) {
   }
 }
 
-// Buyer email for a paid indicator order: a durable download link for the
-// compiled .ex4 file(s). Same SMTP / not-configured behaviour as signals.
-function indicatorEmailHtml({ buyerName, productName, amountLabel, downloadUrl, files }) {
-  const rows = files.map((f) => `<li>${f}</li>`).join('');
+// Buyer email for a paid indicator order: durable download link(s) for the
+// zip package(s). Same SMTP / not-configured behaviour as signals.
+// `packages` is [{ productId, filename, items }] from
+// indicators.packageContents() — one entry per zip the order delivers.
+function indicatorEmailHtml({ buyerName, productName, amountLabel, downloadUrl, packages }) {
+  const blocks = packages.map((pkg) => {
+    const items = pkg.items.map((it) => `<li>${it}</li>`).join('');
+    return `<p><b>${pkg.filename}</b></p><ul>${items}</ul>`;
+  }).join('');
   return `
     <div style="font-family:Arial,sans-serif;color:#111;max-width:560px">
       <h2 style="color:#b8860b">Forex Pulse — your indicator download</h2>
       <p>Hi ${buyerName},</p>
       <p>Your ${amountLabel} payment was received. Here is your download:</p>
       <p><b>${productName}</b></p>
-      <ul>${rows}</ul>
+      ${blocks}
       <p>Download it any time here: <a href="${downloadUrl}">${downloadUrl}</a></p>
-      <p>Install it in MetaTrader 4: copy the .ex4 file into your MT4 <b>MQL4/Indicators</b> folder, then restart MT4 or refresh the Navigator.</p>
+      <p><b>Install it in MetaTrader 4:</b></p>
+      <ol>
+        <li>Unzip the package, then copy the <b>.ex4</b> file into your MT4 <b>MQL4/Indicators</b> folder.</li>
+        <li>Copy the preset files (<b>.set</b>) into your MT4 <b>MQL4/Presets</b> folder. In MT4, attach the indicator to a chart, click <b>Load</b> in the inputs window and pick a preset (Standard is a good start).</li>
+      </ol>
+      <p>Full steps are in the <b>Installation_Guide.md</b> inside the package. After copying the files, restart MT4 or refresh the Navigator.</p>
       <p style="color:#666;font-size:13px">Copyright (C) 2026 DEUS. All rights reserved. Licensed for your own use only — you may run the indicator on your own charts, but may NOT copy, share, repost, resell or redistribute it, in whole or in part, without DEUS's written permission. One-time purchase, no expiration date. Analytical tools only — they never place trades and are not financial advice.</p>
       <p>— Forex Pulse</p>
     </div>`;
 }
 
-async function sendIndicatorEmail({ buyerName, buyerEmail, productName, amountLabel, downloadUrl, files }) {
+async function sendIndicatorEmail({ buyerName, buyerEmail, productName, amountLabel, downloadUrl, packages }) {
   const t = transporter();
   if (!t) return { sent: false, reason: 'not_configured' };
   try {
@@ -82,7 +92,7 @@ async function sendIndicatorEmail({ buyerName, buyerEmail, productName, amountLa
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: buyerEmail,
       subject: `Forex Pulse — your ${productName} download`,
-      html: indicatorEmailHtml({ buyerName, productName, amountLabel, downloadUrl, files }),
+      html: indicatorEmailHtml({ buyerName, productName, amountLabel, downloadUrl, packages }),
     });
     return { sent: true };
   } catch (e) {
@@ -90,4 +100,4 @@ async function sendIndicatorEmail({ buyerName, buyerEmail, productName, amountLa
   }
 }
 
-module.exports = { sendUnlockEmail, sendIndicatorEmail, smtpConfigured: () => !!transporter() };
+module.exports = { sendUnlockEmail, sendIndicatorEmail, indicatorEmailHtml, smtpConfigured: () => !!transporter() };

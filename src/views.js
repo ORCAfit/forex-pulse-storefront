@@ -306,8 +306,8 @@ function signalCard(s, opts) {
 
 // --- MT4 Indicators: introduction, what each one does, and pricing.
 // Copy follows the listing PDF (Forex Indicators — Listing & Pricing).
-// Buy buttons are gated on the compiled .ex4 file being present in
-// downloads/ — a product whose file is not published yet shows
+// Buy buttons are gated on the product's zip package being present in
+// downloads/ — a product whose package is not published yet shows
 // "Coming soon" and cannot start a checkout.
 function indicatorsSection(avail) {
   const buyForm = (product) => {
@@ -670,13 +670,21 @@ function indicatorDownloadPage({ order }) {
     return layout('Download', `<section class="card narrow"><h2>Download not found</h2><p>This link does not match a paid indicator order. If you paid, check your confirmation email for the correct link.</p><p><a href="/">← Back to Forex Pulse</a></p></section>`);
   }
   const product = indicators.PRODUCTS[order.product];
-  const files = product ? indicators.productDownloads(product) : [];
-  const links = files.map((d) => `<li><a href="/download/${esc(order.access_token)}/${d.productId}">${esc(d.filename)}</a></li>`).join('');
+  const packages = product ? indicators.packageContents(product) : [];
+  const blocks = packages.map((pkg) => {
+    const items = pkg.items.map((it) => `<li>${esc(it)}</li>`).join('');
+    return `<p><b><a href="/download/${esc(order.access_token)}/${pkg.productId}">${esc(pkg.filename)}</a></b></p><ul>${items}</ul>`;
+  }).join('');
   return layout('Your indicator download', `<section class="card narrow">
   <h2>Your indicator download</h2>
   <p><b>${esc(product ? product.name : order.product)}</b> — paid $${(order.amount_cents / 100).toFixed(2)} on ${fmtTime(order.paid_at || order.created_at)}</p>
-  <ul>${links}</ul>
-  <p class="fine">Install in MetaTrader 4: copy the .ex4 file into your MT4 MQL4/Indicators folder, then restart MT4 or refresh the Navigator.</p>
+  ${blocks}
+  <h3>Install in MetaTrader 4</h3>
+  <ol>
+    <li>Unzip the package, then copy the <b>.ex4</b> file into your MT4 <b>MQL4/Indicators</b> folder.</li>
+    <li>Copy the preset files (<b>.set</b>) into your MT4 <b>MQL4/Presets</b> folder. In MT4, attach the indicator to a chart, click <b>Load</b> in the inputs window and pick a preset (Standard is a good start).</li>
+  </ol>
+  <p class="fine">Full steps are in the <b>Installation_Guide.md</b> inside the package. After copying the files, restart MT4 or refresh the Navigator.</p>
   <p class="fine">Copyright (C) 2026 DEUS. All rights reserved. Licensed for your own use only.</p>
   <p><a href="/">← Back to Forex Pulse</a></p>
 </section>`);
