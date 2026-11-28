@@ -132,19 +132,19 @@ async function fulfillOrder(session, source) {
 
 // --- indicator orders ------------------------------------------------------
 // Same pattern as signals: mark paid (idempotent), then email the buyer a
-// durable download link for the compiled .ex4 file(s).
+// durable download link for the zip package(s).
 async function sendIndicatorEmailForOrder(order) {
   const product = indicators.PRODUCTS[order.product];
   if (!product) return;
   const downloadUrl = `${BASE_URL}/download/${order.access_token}`;
-  const files = indicators.productDownloads(product).map((d) => d.filename);
+  const packages = indicators.packageContents(product);
   const result = await mail.sendIndicatorEmail({
     buyerName: order.buyer_name,
     buyerEmail: order.buyer_email,
     productName: product.name,
     amountLabel: `$${(order.amount_cents / 100).toFixed(2)}`,
     downloadUrl,
-    files,
+    packages,
   });
   if (result.sent) db.setIndicatorOrderEmailStatus(order.id, 'sent');
   else if (result.reason === 'not_configured') db.setIndicatorOrderEmailStatus(order.id, 'not_configured');
@@ -239,9 +239,9 @@ app.post('/api/orders', async (req, res) => {
 });
 
 // Create an indicator order + Stripe Checkout session.
-// GATED ON FILE PRESENCE: if the .ex4 file(s) for the product are not in
-// downloads/, checkout never starts — nobody can pay for a file that
-// cannot be delivered.
+// GATED ON FILE PRESENCE: if the zip package(s) for the product are not
+// in downloads/, checkout never starts — nobody can pay for a package
+// that cannot be delivered.
 app.post('/api/indicator-orders', async (req, res) => {
   const { product: productId, name, email } = req.body || {};
   const product = indicators.PRODUCTS[productId];
@@ -334,9 +334,9 @@ app.get('/unlock/:token', (req, res) => {
   res.send(views.unlockPage({ order, signal }));
 });
 
-// --- indicator downloads (token-gated, .ex4 only) ---------------------------
+// --- indicator downloads (token-gated, zip packages only) -----------------
 // Durable download page for a paid indicator order (also emailed to the
-// buyer). Lists one download link per file the order includes.
+// buyer). Lists one download link per zip package the order includes.
 app.get('/download/:token', (req, res) => {
   const order = db.getIndicatorOrderByToken(req.params.token);
   if (!order || order.status !== 'paid') {
@@ -345,9 +345,9 @@ app.get('/download/:token', (req, res) => {
   res.send(views.indicatorDownloadPage({ order }));
 });
 
-// Serve one compiled .ex4 file. The product id is checked against the
-// order (a single-indicator order downloads only its own file; a bundle
-// downloads either), and the filename comes from a whitelist in
+// Serve one zip package. The product id is checked against the
+// order (a single-indicator order downloads only its own package; a
+// bundle downloads either), and the filename comes from a whitelist in
 // src/indicators.js — never from the request — so no other file, and
 // never the .mq4 source, can be reached through this route.
 app.get('/download/:token/:product', (req, res) => {
