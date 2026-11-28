@@ -3,6 +3,7 @@
  * Server-rendered HTML. Layout order (per the owner's spec):
  *   Dashboard header + headline → stat cards → live prices
  *   → signal matrix / cards → Forex signals ($20 each)
+ *   → MT4 Indicators (intro, what each does, pricing, license)
  *   → Performance Log → Upcoming News Events (live economic calendar)
  *   → daily summary below the signals
  *   → D1 note under the signals → risk note + Owner link only
@@ -16,6 +17,7 @@
  * and always computed from the real signals in the database.
  */
 const { PAIRS, pipsFor } = require('./prices');
+const indicators = require('./indicators');
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -302,7 +304,96 @@ function signalCard(s, opts) {
   </article>`;
 }
 
-function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToday, unlockedIds, priceByPair, calendar }) {
+// --- MT4 Indicators: introduction, what each one does, and pricing.
+// Copy follows the listing PDF (Forex Indicators — Listing & Pricing).
+// Buy buttons are gated on the compiled .ex4 file being present in
+// downloads/ — a product whose file is not published yet shows
+// "Coming soon" and cannot start a checkout.
+function indicatorsSection(avail) {
+  const buyForm = (product) => {
+    if (!avail[product.id]) {
+      return `<p><button class="btn btn-gold" disabled>Coming soon — ${product.priceLabel}</button></p>
+      <p class="fine">The download file for this indicator has not been published yet — check back soon.</p>`;
+    }
+    return `<form class="indicator-order-form" data-product="${product.id}">
+      <input type="text" name="name" placeholder="Your name" required>
+      <input type="email" name="email" placeholder="Your email" required>
+      <button type="submit" class="btn btn-gold">Buy — ${product.priceLabel} with card</button>
+      <p class="form-hint">One-time purchase, no expiration date. You will be taken to secure Stripe Checkout. After payment, your download link is emailed to you and shown on the confirmation page.</p>
+    </form>`;
+  };
+  const flr = indicators.PRODUCTS.flr;
+  const fbpi = indicators.PRODUCTS.fbpi;
+  const bundle = indicators.PRODUCTS.bundle;
+  return `<section class="card" id="indicators">
+  <h2>MT4 Indicators</h2>
+  <p class="dash-sub">Two original indicators by DEUS, built for MT4. FLR finds the level. FBPI tells you whether the bigger picture is worth trading at all. One-time purchase, no expiration date — one payment, one download, licensed for the buyer's own use only.</p>
+  <p class="dash-sub">Built on institutional-grade analysis — the same methods professional trading desks rely on: session liquidity, key levels, volume profile, and top-down confirmation, engineered for MetaTrader 4.</p>
+  <div class="ind-grid">
+    <article class="ind-card">
+      <h3>Forex Level Radar Pro</h3>
+      <p class="fine">FLR-MT4-001 — Key Levels, Probabilities &amp; Session Dashboard</p>
+      <img class="ind-shot" src="/flr-dashboard.png" alt="Forex Level Radar Pro dashboard box — key levels, touch probabilities and scoreboard" loading="lazy">
+      <p>Forex Level Radar Pro puts the levels that matter on one dark, clean dashboard — so you can see where price is, what it has already touched, and which level is most likely to be tested next, without drawing lines by hand all morning. Built for MT4 across 15 pairs, FLR runs 7 engines at once: key levels, touch probability, session intelligence, liquidity sweeps vs. breakouts, candle analysis, and a Brier-score scoreboard that tracks how its own probabilities performed. It is analytical only — it never places, modifies, or closes a trade.</p>
+      <h4>What FLR shows</h4>
+      <ul class="ind-list">
+        <li>Key levels: Previous Day High / Low / Close / Open (PDH / PDL / PDC / PDO), session highs and lows, opening range</li>
+        <li>Touch probability for each level, with a scoreboard</li>
+        <li>Session intelligence: Asian / London / New York, UTC-based</li>
+        <li>Liquidity sweeps vs. real breakouts, plus candle analysis</li>
+      </ul>
+      <h4>FLR is good for</h4>
+      <ul class="ind-list">
+        <li>Intraday planning and level-based entries</li>
+        <li>Traders who watch multiple pairs at once</li>
+        <li>Anyone who wants levels plus probability, not just lines</li>
+      </ul>
+      <p class="fine">Includes: compiled .ex4, 8 documents, 3 presets, Sample_Scoreboard.csv, and install guide.</p>
+      <p class="ind-price">${flr.priceLabel} <span class="ind-per">one-time · launch price</span></p>
+      ${buyForm(flr)}
+    </article>
+    <article class="ind-card">
+      <h3>Forex Bigger Picture Intelligence System</h3>
+      <p class="fine">FBPI-MT4-001 — 23-Layer Top-Down Framework &amp; Risk Dashboard</p>
+      <img class="ind-shot" src="/fbpi-dashboard.png" alt="Forex Bigger Picture Intelligence dashboard box — market structure, sessions, volume and execution readiness" loading="lazy">
+      <p>Forex Bigger Picture Intelligence is the top-down companion to FLR. Where FLR answers “which level?”, FBPI answers “should I be looking to trade at all — and in which direction does the bigger picture point?” FBPI works through a 23-layer framework in a single 600px dashboard, with a built-in risk framework: $5,000 paper capital model, 0.5% risk per trade, 2% maximum daily loss, and a 1:2 minimum reward-to-risk. Like FLR, it is analytical only and never places a trade.</p>
+      <h4>What FBPI does</h4>
+      <ul class="ind-list">
+        <li>23-layer top-down check, from context to execution readiness</li>
+        <li>One clear bigger-picture view instead of scattered indicators</li>
+        <li>Risk sizing and daily-loss guardrails in the workflow</li>
+        <li>Single-file build — one file to install in MT4</li>
+      </ul>
+      <h4>FBPI is good for</h4>
+      <ul class="ind-list">
+        <li>Daily (D1) planning before the session</li>
+        <li>Traders who overtrade and want a filter first</li>
+        <li>Pairing with FLR: FBPI for direction, FLR for the level</li>
+      </ul>
+      <p class="fine">Includes: compiled .ex4 (single-file build), 11 documents, 3 presets, sample CSVs, and install guide.</p>
+      <p class="ind-price">${fbpi.priceLabel} <span class="ind-per">one-time · launch price</span></p>
+      ${buyForm(fbpi)}
+    </article>
+    <article class="ind-card ind-bundle">
+      <h3>Bundle — Both Indicators</h3>
+      <p class="fine">FLR-MT4-001 + FBPI-MT4-001</p>
+      <p>Both indicators together: use FBPI for direction, FLR for the level. One payment, both downloads, licensed for your own use only.</p>
+      <p class="ind-price">${bundle.priceLabel} <span class="ind-per">one-time · launch price</span> <span class="ind-save">Save $49 vs. buying separately</span></p>
+      ${buyForm(bundle)}
+    </article>
+  </div>
+  <div class="license-box">
+    <h3>License terms</h3>
+    <p>Copyright (C) 2026 DEUS. All rights reserved.</p>
+    <p>Sold as a license for the buyer's own use only. The buyer may run the indicator on their own charts, but may NOT copy, share, repost, resell or redistribute it, in whole or in part, without DEUS's written permission. One-time purchase, no expiration date. Compiled .ex4 files only — the .mq4 source code is not included and is not for sale. Not public domain.</p>
+  </div>
+  <p class="fine"><b>Analytical only.</b> These tools analyse and display information. They do not place, modify, or close trades, and they are not financial advice.</p>
+  <p class="fine"><b>MT4 only, history matters.</b> Requires MetaTrader 4. Load at least 100 days of H1 history; with too little history the dashboard correctly shows INSUFFICIENT DATA / DATA UNAVAILABLE.</p>
+  <p class="fine"><b>Honest limits:</b> No live futures or economic-calendar feed; order book is unavailable in MT4, and order-flow figures are estimates.</p>
+</section>`;
+}
+
+function publicPage({ prices, updatedAt, signals, summary, winLoss, newPairsToday, unlockedIds, priceByPair, calendar, indicatorAvailability }) {
   const openSignals = signals.filter((s) => s.status === 'open');
   const filterOptions = ['All pairs', ...PAIRS.map((p) => p.pair)]
     .map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
@@ -376,6 +467,8 @@ ${cardsSection(prices, openByPair, newPairsToday)}
   <div id="signal-list">${signalCards}</div>
 </section>
 
+${indicatorsSection(indicatorAvailability || {})}
+
 ${logSection(signals)}
 
 ${calendarSection(calendar || { events: [], ok: false })}
@@ -412,7 +505,26 @@ function ownerLoginPage(error) {
 </section>`);
 }
 
-function ownerPage({ signals, orders, smtpConfigured, notice, error }) {
+function indicatorOrderRow(o) {
+  const product = indicators.PRODUCTS[o.product];
+  const emailCell = o.email_status === 'sent' ? 'Sent ✓'
+    : o.email_status === 'not_configured' ? '<span class="error">Not sent — no email service connected</span>'
+    : o.email_status === 'failed' ? `<span class="error">Failed: ${esc(o.email_error || '')}</span>`
+    : 'Pending';
+  const manual = (o.email_status === 'failed' || o.email_status === 'not_configured') && o.status === 'paid'
+    ? `<div class="manual-send"><b>Send manually:</b> download link — /download/${esc(o.access_token)} for ${esc(o.buyer_email)}.</div>` : '';
+  return `<tr>
+    <td>#${o.id}</td><td>${esc(product ? product.name : o.product)}</td>
+    <td>${esc(o.buyer_name)}<br><span class="fine">${esc(o.buyer_email)}</span></td>
+    <td>${o.status}</td><td>$${(o.amount_cents / 100).toFixed(2)}</td>
+    <td>${emailCell}${manual}</td>
+    <td>${fmtTime(o.created_at)}</td>
+    <td>${o.status === 'paid' ? `<a href="/download/${esc(o.access_token)}">Download page</a>` : ''}${o.status === 'paid' && o.email_status !== 'sent'
+      ? `<form method="post" action="/owner/indicator-orders/${o.id}/resend"><button class="btn btn-small">Resend email</button></form>` : ''}</td>
+  </tr>`;
+}
+
+function ownerPage({ signals, orders, indicatorOrders, smtpConfigured, notice, error }) {
   const pairOptions = PAIRS.map((p) => `<option value="${esc(p.pair)}">${esc(p.pair)}</option>`).join('');
   const openSignals = signals.filter((s) => s.status === 'open');
   const history = signals.filter((s) => s.status !== 'open');
@@ -486,6 +598,11 @@ ${smtpConfigured ? '' : '<p class="error">Email is not configured (no SMTP setti
   ${orders.length ? `<table class="tbl"><thead><tr><th>Order</th><th>Signal</th><th>Buyer</th><th>Status</th><th>Amount</th><th>Confirmation email</th><th>Placed</th><th></th></tr></thead><tbody>${orders.map(orderRow).join('')}</tbody></table>` : '<p class="empty">No orders yet.</p>'}
 </section>
 
+<section class="card">
+  <h2>Indicator orders</h2>
+  ${(indicatorOrders || []).length ? `<table class="tbl"><thead><tr><th>Order</th><th>Product</th><th>Buyer</th><th>Status</th><th>Amount</th><th>Download email</th><th>Placed</th><th></th></tr></thead><tbody>${(indicatorOrders || []).map(indicatorOrderRow).join('')}</tbody></table>` : '<p class="empty">No indicator orders yet.</p>'}
+</section>
+
 <p><a href="/">← Back to storefront</a> · <a href="/owner/logout">Lock Owner view</a></p>`);
 }
 
@@ -532,4 +649,37 @@ function unlockPage({ order, signal }) {
 </section>`);
 }
 
-module.exports = { layout, publicPage, ownerLoginPage, ownerPage, successPage, unlockPage, fmtTime, fmtDate, esc };
+function indicatorSuccessPage({ order, emailSent }) {
+  if (!order) {
+    return layout('Payment', `<section class="card narrow"><h2>Payment</h2><p>We could not confirm this payment. If you paid, the download email is on its way — otherwise please try again from the indicators section.</p><p><a href="/">← Back to Forex Pulse</a></p></section>`);
+  }
+  const product = indicators.PRODUCTS[order.product];
+  return layout('Indicator download', `<section class="card narrow">
+  <h2>Payment received — your download is ready</h2>
+  <p>Your $${(order.amount_cents / 100).toFixed(2)} payment was received for <b>${esc(product ? product.name : order.product)}</b>.</p>
+  <p><a class="btn btn-gold" href="/download/${esc(order.access_token)}">Download your indicator</a></p>
+  <p>${emailSent ? 'A confirmation email with your download link was sent to ' + esc(order.buyer_email) + '.' : 'Save this page — your download link was also emailed to you if email is configured.'}</p>
+  <p>Your download link (bookmark it): <a href="/download/${esc(order.access_token)}">Download any time</a></p>
+  <p class="fine">Copyright (C) 2026 DEUS. All rights reserved. Licensed for your own use only — you may run the indicator on your own charts, but may NOT copy, share, repost, resell or redistribute it.</p>
+  <p><a href="/">← Back to Forex Pulse</a></p>
+</section>`);
+}
+
+function indicatorDownloadPage({ order }) {
+  if (!order) {
+    return layout('Download', `<section class="card narrow"><h2>Download not found</h2><p>This link does not match a paid indicator order. If you paid, check your confirmation email for the correct link.</p><p><a href="/">← Back to Forex Pulse</a></p></section>`);
+  }
+  const product = indicators.PRODUCTS[order.product];
+  const files = product ? indicators.productDownloads(product) : [];
+  const links = files.map((d) => `<li><a href="/download/${esc(order.access_token)}/${d.productId}">${esc(d.filename)}</a></li>`).join('');
+  return layout('Your indicator download', `<section class="card narrow">
+  <h2>Your indicator download</h2>
+  <p><b>${esc(product ? product.name : order.product)}</b> — paid $${(order.amount_cents / 100).toFixed(2)} on ${fmtTime(order.paid_at || order.created_at)}</p>
+  <ul>${links}</ul>
+  <p class="fine">Install in MetaTrader 4: copy the .ex4 file into your MT4 MQL4/Indicators folder, then restart MT4 or refresh the Navigator.</p>
+  <p class="fine">Copyright (C) 2026 DEUS. All rights reserved. Licensed for your own use only.</p>
+  <p><a href="/">← Back to Forex Pulse</a></p>
+</section>`);
+}
+
+module.exports = { layout, publicPage, ownerLoginPage, ownerPage, successPage, unlockPage, indicatorSuccessPage, indicatorDownloadPage, fmtTime, fmtDate, esc };

@@ -56,4 +56,38 @@ async function sendUnlockEmail({ buyerName, buyerEmail, signal, unlockUrl }) {
   }
 }
 
-module.exports = { sendUnlockEmail, smtpConfigured: () => !!transporter() };
+// Buyer email for a paid indicator order: a durable download link for the
+// compiled .ex4 file(s). Same SMTP / not-configured behaviour as signals.
+function indicatorEmailHtml({ buyerName, productName, amountLabel, downloadUrl, files }) {
+  const rows = files.map((f) => `<li>${f}</li>`).join('');
+  return `
+    <div style="font-family:Arial,sans-serif;color:#111;max-width:560px">
+      <h2 style="color:#b8860b">Forex Pulse — your indicator download</h2>
+      <p>Hi ${buyerName},</p>
+      <p>Your ${amountLabel} payment was received. Here is your download:</p>
+      <p><b>${productName}</b></p>
+      <ul>${rows}</ul>
+      <p>Download it any time here: <a href="${downloadUrl}">${downloadUrl}</a></p>
+      <p>Install it in MetaTrader 4: copy the .ex4 file into your MT4 <b>MQL4/Indicators</b> folder, then restart MT4 or refresh the Navigator.</p>
+      <p style="color:#666;font-size:13px">Copyright (C) 2026 DEUS. All rights reserved. Licensed for your own use only — you may run the indicator on your own charts, but may NOT copy, share, repost, resell or redistribute it, in whole or in part, without DEUS's written permission. One-time purchase, no expiration date. Analytical tools only — they never place trades and are not financial advice.</p>
+      <p>— Forex Pulse</p>
+    </div>`;
+}
+
+async function sendIndicatorEmail({ buyerName, buyerEmail, productName, amountLabel, downloadUrl, files }) {
+  const t = transporter();
+  if (!t) return { sent: false, reason: 'not_configured' };
+  try {
+    await t.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: buyerEmail,
+      subject: `Forex Pulse — your ${productName} download`,
+      html: indicatorEmailHtml({ buyerName, productName, amountLabel, downloadUrl, files }),
+    });
+    return { sent: true };
+  } catch (e) {
+    return { sent: false, reason: 'send_failed', error: e.message };
+  }
+}
+
+module.exports = { sendUnlockEmail, sendIndicatorEmail, smtpConfigured: () => !!transporter() };

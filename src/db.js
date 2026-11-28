@@ -43,10 +43,28 @@ db.exec(`
     created_at TEXT NOT NULL,
     paid_at TEXT
   );
+  CREATE TABLE IF NOT EXISTS indicator_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product TEXT NOT NULL CHECK (product IN ('flr','fbpi','bundle')),
+    buyer_name TEXT NOT NULL,
+    buyer_email TEXT NOT NULL,
+    access_token TEXT NOT NULL UNIQUE,
+    stripe_session_id TEXT,
+    stripe_payment_intent TEXT,
+    amount_cents INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'usd',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed')),
+    email_status TEXT NOT NULL DEFAULT 'pending' CHECK (email_status IN ('pending','sent','failed','not_configured')),
+    email_error TEXT,
+    created_at TEXT NOT NULL,
+    paid_at TEXT
+  );
   CREATE INDEX IF NOT EXISTS idx_signals_status ON signals(status);
   CREATE INDEX IF NOT EXISTS idx_signals_created ON signals(created_at);
   CREATE INDEX IF NOT EXISTS idx_orders_token ON orders(access_token);
   CREATE INDEX IF NOT EXISTS idx_orders_session ON orders(stripe_session_id);
+  CREATE INDEX IF NOT EXISTS idx_indicator_orders_token ON indicator_orders(access_token);
+  CREATE INDEX IF NOT EXISTS idx_indicator_orders_session ON indicator_orders(stripe_session_id);
 `);
 
 const nowIso = () => new Date().toISOString();
@@ -134,8 +152,54 @@ function countWonLost() {
   return { won: row.won || 0, lost: row.lost || 0 };
 }
 
+// --- Indicator orders (MT4 .ex4 sales; separate from signal orders) -------
+function createIndicatorOrder({ product, buyerName, buyerEmail, accessToken, amountCents }) {
+  const ts = nowIso();
+  const r = db.prepare(
+    'INSERT INTO indicator_orders (product, buyer_name, buyer_email, access_token, amount_cents, status, email_status, created_at) VALUES (?,?,?,?,?,?,?,?)'
+  ).run(product, buyerName, buyerEmail, accessToken, amountCents, 'pending', 'pending', ts);
+  return getIndicatorOrder(r.lastInsertRowid);
+}
+
+function getIndicatorOrder(id) {
+  return db.prepare('SELECT * FROM indicator_orders WHERE id = ?').get(id) || null;
+}
+
+function getIndicatorOrderByToken(token) {
+  return db.prepare('SELECT * FROM indicator_orders WHERE access_token = ?').get(token) || null;
+}
+
+function getIndicatorOrderBySession(sessionId) {
+  return db.prepare('SELECT * FROM indicator_orders WHERE stripe_session_id = ?').get(sessionId) || null;
+}
+
+function setIndicatorOrderSession(id, sessionId) {
+  db.prepare('UPDATE indicator_orders SET stripe_session_id = ? WHERE id = ?').run(sessionId, id);
+  return getIndicatorOrder(id);
+}
+
+function markIndicatorOrderPaid(id, paymentIntent) {
+  const ts = nowIso();
+  db.prepare("UPDATE indicator_orders SET status = 'paid', stripe_payment_intent = ?, paid_at = ? WHERE id = ?")
+    .run(paymentIntent || null, ts, id);
+  return getIndicatorOrder(id);
+}
+
+function setIndicatorOrderEmailStatus(id, emailStatus, error) {
+  db.prepare('UPDATE indicator_orders SET email_status = ?, email_error = ? WHERE id = ?')
+    .run(emailStatus, error || null, id);
+  return getIndicatorOrder(id);
+}
+
+function listIndicatorOrders() {
+  return db.prepare('SELECT * FROM indicator_orders ORDER BY created_at DESC').all();
+}
+
 module.exports = {
   db, nowIso, createSignal, getSignal, listSignals, setSignalStatus, deleteSignal,
   createOrder, getOrder, getOrderByToken, getOrderBySession, setOrderSession,
   markOrderPaid, setOrderEmailStatus, listOrders, countWonLost,
+  createIndicatorOrder, getIndicatorOrder, getIndicatorOrderByToken,
+  getIndicatorOrderBySession, setIndicatorOrderSession, markIndicatorOrderPaid,
+  setIndicatorOrderEmailStatus, listIndicatorOrders,
 };
