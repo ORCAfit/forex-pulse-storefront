@@ -356,7 +356,7 @@ function indicatorsSection(avail) {
       <h3>Forex Bigger Picture Intelligence System</h3>
       <p class="fine">FBPI-MT4-001 — 23-Layer Top-Down Framework &amp; Risk Dashboard</p>
       <img class="ind-shot" src="/fbpi-dashboard.png" alt="Forex Bigger Picture Intelligence dashboard box — market structure, sessions, volume and execution readiness" loading="lazy">
-      <p>Forex Bigger Picture Intelligence is the top-down companion to FLR. Where FLR answers “which level?”, FBPI answers “should I be looking to trade at all — and in which direction does the bigger picture point?” FBPI works through a 23-layer framework in a single 600px dashboard, with a built-in risk framework: $5,000 paper capital model, 0.5% risk per trade, 2% maximum daily loss, and a 1:2 minimum reward-to-risk. Like FLR, it is analytical only and never places a trade.</p>
+      <p>Forex Bigger Picture Intelligence is the top-down companion to FLR. Where FLR answers “which level?”, FBPI answers “should I be looking to trade at all — and in which direction does the bigger picture point?” FBPI works through a 23-layer framework in a single 600px dashboard, with a built-in risk framework. Like FLR, it is analytical only and never places a trade.</p>
       <h4>What FBPI does</h4>
       <ul class="ind-list">
         <li>23-layer top-down check, from context to execution readiness</li>
